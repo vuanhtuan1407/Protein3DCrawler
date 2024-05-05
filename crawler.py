@@ -21,7 +21,7 @@ SAVE_DIR = './data/pdb'
 # options = webdriver.ChromeOptions()
 # driver = webdriver.Chrome(options=options)
 
-logger = Logger()
+logger = Logger(filename='./logs/crawler.log', use_console=True)
 
 
 def extract_prot_ids_fasta(fasta_file=SP6_PATH):
@@ -33,17 +33,22 @@ def extract_prot_ids_fasta(fasta_file=SP6_PATH):
     return prot_ids
 
 
-def load_cached():
+def load_cache():
     done_ids = np.loadtxt('./done_ids.txt', dtype=str)
     missing_ids = np.loadtxt('./missing_ids.txt', dtype=str)
     return done_ids.tolist(), missing_ids.tolist()
+
+
+def save_cache(done_ids, missing_ids):
+    np.savetxt(fname='done_ids.txt', X=done_ids, fmt='%s')
+    np.savetxt(fname='missing_ids.txt', X=missing_ids, fmt='%s')
 
 
 def download_pdb_by_alphafold():
     prot_ids = extract_prot_ids_fasta()
     if not os.path.exists(SAVE_DIR):
         os.makedirs(SAVE_DIR, exist_ok=True)
-    done_ids, missing_ids = load_cached()
+    done_ids, missing_ids = load_cache()
     for i, prot_id in enumerate(prot_ids):
         if i > 0 and i % 100 == 0:
             logger.info(f'Processing {i}/{len(prot_ids)} records')
@@ -52,7 +57,7 @@ def download_pdb_by_alphafold():
             filename = SAVE_DIR + f'/AF-{prot_id}-F1-model_v4.pdb'
             try:
                 req.urlretrieve(download_url, filename)
-                # logger.info(f'Downloaded at {filename}')
+                logger.info(f'Downloaded at {filename}')
                 done_ids.append(prot_id)
             except Exception as e:
                 logger.error(f'Failed to download {prot_id}: {e}')
@@ -60,15 +65,17 @@ def download_pdb_by_alphafold():
 
             if i > 0 and i % 100 == 0:
                 # logger.info(f'Processing thought {i} records')
-                np.savetxt(fname='done_ids.txt', X=done_ids, fmt='%s')
-                np.savetxt(fname='missing_ids.txt', X=missing_ids, fmt='%s')
+                save_cache(done_ids, missing_ids)
 
         # time.sleep(3)  # prevent bot detection (do not necessary)
+
+    # save after running
+    save_cache(done_ids, missing_ids)
 
 
 def retry_download_from_uniprot():
     convert_ids = {}
-    done_ids, missing_ids = load_cached()
+    done_ids, missing_ids = load_cache()
     options = webdriver.ChromeOptions()
     options.add_argument('--headless')
     driver = webdriver.Chrome(options=options)
