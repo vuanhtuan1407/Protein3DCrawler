@@ -1,8 +1,14 @@
 # crawling data
 data/pdb/*
 
-# .zip
+# large files
 data/*.zip
+data/*.json
+data/*.fasta
+data/*.csv
 
 # logs
 logs/*.log
+
+# store
+store

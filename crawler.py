@@ -7,7 +7,6 @@ import urllib.request as req
 import numpy as np
 from Bio import SeqIO
 from selenium import webdriver
-from selenium.common import TimeoutException
 from selenium.webdriver.common.by import By
 # from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -44,6 +43,7 @@ def save_cache(done_ids, missing_ids):
     np.savetxt(fname='missing_ids.txt', X=missing_ids, fmt='%s')
 
 
+# First try to download
 def download_pdb_by_alphafold():
     prot_ids = extract_prot_ids_fasta()
     if not os.path.exists(SAVE_DIR):
@@ -73,6 +73,7 @@ def download_pdb_by_alphafold():
     save_cache(done_ids, missing_ids)
 
 
+# Retry
 def retry_download_from_uniprot():
     convert_ids = {}
     done_ids, missing_ids = load_cache()
@@ -86,7 +87,7 @@ def retry_download_from_uniprot():
             # Retry downloading ids missing from downloading process above by accessing from uniprot page
             current_url = driver.current_url
             af_url = WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.XPATH, "//a[text()='AlphaFold"))
+                EC.presence_of_element_located((By.XPATH, "//a[text()='AlphaFold']"))
             ).get_attribute('href')
             new_prot_id = current_url.split('/')[-2]  # retrieve new prot_id
             driver.get(af_url)
@@ -94,7 +95,7 @@ def retry_download_from_uniprot():
             download_url = WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.XPATH, "//a[text()='PDB file ']"))
             ).get_attribute('href')
-            filename = SAVE_DIR + f'/AF-{new_prot_id}-F1-model_v4.pdb'
+            filename = f'{SAVE_DIR}/AF-{new_prot_id}-F1-model_v4.pdb'
             try:
                 req.urlretrieve(download_url, filename)
                 missing_ids = missing_ids.remove(prot_id)
@@ -104,7 +105,7 @@ def retry_download_from_uniprot():
                 time.sleep(3)
             except Exception as e:
                 logger.error(f'Failed to download {prot_id}: {e}')
-        except TimeoutException:
+        except Exception:
             logger.error('No AlphaFoldl url found')
 
     # Save convert ids of success retrying
@@ -112,9 +113,29 @@ def retry_download_from_uniprot():
         json.dump(convert_ids, f)
 
 
+def sync_and_check_existed_files():
+    prot_ids = extract_prot_ids_fasta()
+    done_ids, missing_ids = load_cache()
+    for i, prot_id in enumerate(prot_ids):
+        if prot_id not in done_ids:
+            if not os.path.exists(f'{SAVE_DIR}/AF-{prot_id}-F1-model_v4.pdb') and prot_id not in missing_ids:
+                logger.error(f'Missing protein {prot_id}: Have not processed this protein yet!')
+                # missing_ids.append(prot_id)
+            elif os.path.exists(f'{SAVE_DIR}/AF-{prot_id}-F1-model_v4.pdb') and prot_id not in missing_ids:
+                logger.warning(f'Missing protein {prot_id} in done_ids')
+                # done_ids.append(prot_id)
+            elif os.path.exists(f'{SAVE_DIR}/AF-{prot_id}-F1-model_v4.pdb') and prot_id in missing_ids:
+                logger.warning(f'Missing protein {prot_id} in done_ids but in missing_ids')
+                # done_ids.append(prot_id)
+                # missing_ids.remove(prot_id)
+
+    # save_cache(done_ids, missing_ids)
+
+
 if __name__ == '__main__':
     # prot_ids = extract_prot_ids_fasta()
-    download_pdb_by_alphafold()
+    # download_pdb_by_alphafold()
     # After downloading pdb file by alphafold downloading link, some ids were missing
     # Retry downloading these missing ids from uniprot page
     # retry_download_from_uniprot()
+    sync_and_check_existed_files()

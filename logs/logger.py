@@ -9,7 +9,7 @@ class Logger(object):
         self.log_dir = os.path.dirname(__file__)
         self.filename = filename
         self.use_console = use_console
-        self.logger = logging.getLogger(os.path.basename(__file__))
+        self.logger = logging.getLogger(os.path.basename(__name__))
         self._configure_logging()
 
     def _configure_logging(self):
