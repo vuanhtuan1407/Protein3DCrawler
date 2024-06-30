@@ -12,3 +12,6 @@ logs/*.log
 
 # store
 store
+
+# out
+out

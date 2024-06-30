@@ -23,7 +23,9 @@ def extract_fasta(fasta_file=SP6_PATH):
     return prots
 
 
-def extract_pdb(prot_id, use_lib=True):
+def extract_pdb(prot_id, use_lib=True, specific_len=None):
+    # if specific_len is not None and not isinstance(specific_len, int):
+    #     specific_len = None
     if use_lib:
         prot = []
         parser = PDB.PDBParser()
@@ -36,7 +38,7 @@ def extract_pdb(prot_id, use_lib=True):
                         "residue": residue.resname,
                         "coord": ca.coord.tolist()
                     })
-                    if len(prot) == 70:
+                    if specific_len is not None and len(prot) == specific_len:
                         break
         return prot
     else:
@@ -58,7 +60,7 @@ def build_3d_dataset():
             prot['prot_3d'] = extract_pdb(prot_id=prot_id)
         else:
             prot['prot_3d'] = []
-    with open('./data/3d_dataset.json', 'w') as f:
+    with open('data/3d_dataset.json', 'w') as f:
         json.dump(prots, f)
 
 
@@ -70,46 +72,50 @@ def is_closed_enough(residue1, residue2):
     return dis < 9.0
 
 
-def extract_3d_dataset():
-    PROT3D_PATH = './data/3d_dataset.json'
+def extract_3d_dataset(max_len='longest'):
+    PROT3D_PATH = 'data/3d_dataset.json'
     AA_INFO_PATH = './data/smiles_string_aa.csv'
     df = pd.read_csv(AA_INFO_PATH)
     prots = []
     with open(PROT3D_PATH, 'r') as f:
         data = json.load(f)
-        for prot in data:
+        for prot in tqdm(data):
+            protein_length = len(prot['prot_3d'])
             from_list, to_list = [], []
-            adj_matrix = np.zeros((20, 20), dtype=np.int8)
+            max_len = protein_length if max_len == 'longest' or protein_length < max_len else max_len
+            adj_matrix = np.zeros((max_len, 20), dtype=np.int8)
             if len(prot['prot_3d']) != 0:
                 prot_3d = prot['prot_3d']
-                for i, r1 in enumerate(prot_3d[:-1]):
-                    for j, r2 in enumerate(prot_3d[i + 1:]):
+                for i, r1 in enumerate(prot_3d[:max_len - 1]):
+                    for j, r2 in enumerate(prot_3d[i + 1:max_len]):
                         ret = is_closed_enough(r1, r2)
                         if ret:
                             idx1 = df.index[df['abbreviations'] == r1['residue']].tolist()[0]
                             idx2 = df.index[df['abbreviations'] == r2['residue']].tolist()[0]
-                            from_list.append(idx1)
-                            to_list.append(idx2)
-                            from_list.append(idx2)
-                            to_list.append(idx1)
-                            adj_matrix[idx1, idx2] = 1
-                            adj_matrix[idx2, idx1] = 1
+                            from_list.append(i)
+                            to_list.append(j + i + 1)
+                            from_list.append(j + i + 1)
+                            to_list.append(i)
+                            adj_matrix[i, idx2] = 1
+                            adj_matrix[j + i + 1, idx1] = 1
 
                 prots.append({
                     "prot_id": prot['prot_id'],
                     "kingdom": prot['organism'],
                     "label": prot['label'],
+                    "partition": prot['partition'],
                     "from_list": from_list,
                     "to_list": to_list,
-                    "adj_matrix": adj_matrix.tolist()
+                    "adj_matrix": adj_matrix.tolist(),
+                    "len": protein_length
                 })
 
-    with open(PROT3D_PATH, 'w') as f:
+    with open('./data/train_set_graph.json', 'w') as f:
         json.dump(prots, f)
 
 
 if __name__ == '__main__':
-    # build_3d_dataset()
+    build_3d_dataset()
 
     extract_3d_dataset()
 

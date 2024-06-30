@@ -5,6 +5,7 @@ import time
 import urllib.request as req
 
 import numpy as np
+import pandas as pd
 from Bio import SeqIO
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -132,10 +133,33 @@ def sync_and_check_existed_files():
     # save_cache(done_ids, missing_ids)
 
 
+def statistic_missing_ids():
+    orgs = []
+    lbs = []
+    partitions = []
+    _, missing_ids = load_cache()
+    records = SeqIO.parse(SP6_PATH, 'fasta')
+    for record in records:
+        prot_id, org, lb, partition = str(record.id).split('|')
+        if prot_id in missing_ids:
+            orgs.append(org)
+            lbs.append(lb)
+            partitions.append(f'Partition {partition}')
+
+    df = pd.DataFrame({
+        "missing_id": missing_ids,
+        "org": orgs,
+        "lb": lbs,
+        "partition": partitions
+    })
+    df.to_csv('./out/missing_ids.csv', index=True, index_label='index')
+
+
 if __name__ == '__main__':
     # prot_ids = extract_prot_ids_fasta()
     # download_pdb_by_alphafold()
     # After downloading pdb file by alphafold downloading link, some ids were missing
     # Retry downloading these missing ids from uniprot page
     # retry_download_from_uniprot()
-    sync_and_check_existed_files()
+    # sync_and_check_existed_files()
+    statistic_missing_ids()
